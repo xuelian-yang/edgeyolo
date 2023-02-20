@@ -1,15 +1,21 @@
+# -*- coding: utf-8 -*-
+
 from multiprocessing import Process, Manager, freeze_support
 from datetime import datetime as date
 from loguru import logger
 
 from glob import glob
 
+import logging
 import torch.cuda
 import argparse
 import cv2
 import os
+from termcolor import colored
+import time
 
 from edgeyolo.detect import Detector, TRTDetector, draw
+from util import setup_log
 
 
 def get_args():
@@ -309,5 +315,12 @@ def detect_multi(args):
 
 
 if __name__ == '__main__':
+    time_beg_detect = time.time()
+
     opt = get_args()
+    setup_log(__file__)
     (detect_multi if opt.mp else detect_single)(opt)
+
+    time_end_detect = time.time()
+    logger.warning(f'detect.py elasped {time_end_detect - time_beg_detect} seconds')
+    print(colored(f'detect.py elasped {time_end_detect - time_beg_detect} seconds', 'yellow'))
