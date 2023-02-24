@@ -130,3 +130,5 @@ dmypy.json
 
 Temp*
 models
+temp/
+logs/

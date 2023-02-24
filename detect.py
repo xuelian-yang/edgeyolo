@@ -11,11 +11,16 @@ import torch.cuda
 import argparse
 import cv2
 import os
+import os.path as osp
+import sys
 from termcolor import colored
 import time
 
 from edgeyolo.detect import Detector, TRTDetector, draw
-from util import setup_log
+sys.path.append(osp.abspath(osp.join(osp.dirname(__file__), '..')))
+from common.util import setup_log, d_print
+
+logger = logging.getLogger(__name__)
 
 
 def get_args():
@@ -41,8 +46,16 @@ def get_args():
 
     return parser.parse_args()
 
+def print_args(args):
+    # TODO: collect_env() ~/anaconda3/envs/openmmlab_mmdet3d/lib/python3.9/site-packages/mmcv/utils/env.py / 
+    d_print(f'args:')
+    for arg in vars(args):
+        # print(format(arg, '<20'), format(str(getattr(args, arg)), '<'))
+        d_print(f'  - {arg:20s}: {getattr(args, arg)}')
+
 
 def detect_single(args):
+    logger.info(f'detect_single({args})')
     import time
     exist_save_dir = os.path.isdir(args.save_dir)
 
@@ -89,6 +102,14 @@ def detect_single(args):
     dts_len = 300 // args.batch
     success = True
 
+    win_w = 2880 // 4
+    win_h = 1860 // 4
+
+    name_win = f'EdgeYOLO Detect {osp.basename(args.source)}'
+    cv2.namedWindow(name_win, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(name_win, win_w, win_h)
+    cv2.moveWindow(name_win, 20, 20)
+
     # start inference
     count = 0
     t_start = time.time()
@@ -124,9 +145,11 @@ def detect_single(args):
 
         imgs = draw(frames, results, detect.class_names, 2, draw_label=not args.no_label)
         # print([im.shape for im in frames])
+
         for img in imgs:
             # print(img.shape)
-            cv2.imshow("EdgeYOLO result", img)
+            # cv2.imshow("EdgeYOLO result", img)
+            cv2.imshow(name_win, img)
             count += 1
 
             key = cv2.waitKey(delay)
@@ -149,7 +172,6 @@ def detect_single(args):
 
 
 def inference(msg, results, args):
-    from edgeyolo.detect import Detector, TRTDetector
     detector = TRTDetector if args.trt else Detector
     detect = detector(
         weight_file=args.weights,
@@ -221,8 +243,6 @@ def inference(msg, results, args):
 
 
 def draw_imgs(msg, results, all_imgs, args):
-    from edgeyolo.detect import draw
-
     while "class_names" not in msg:
         pass
     class_names = msg["class_names"]
@@ -245,6 +265,14 @@ def show(msg, all_imgs, args, pid):
     delay = msg["delay"]
     exist_save_dir = os.path.isdir(args.save_dir)
 
+    win_w = 2880 // 4
+    win_h = 1860 // 4
+
+    name_win = f'EdgeYOLO Detect {osp.basename(args.source)}'
+    cv2.namedWindow(name_win, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(name_win, win_w, win_h)
+    cv2.moveWindow(name_win, 20, 20)
+
     all_dt = []
     t0 = time()
     while not msg["end"] or not all_imgs.empty():
@@ -264,7 +292,8 @@ def show(msg, all_imgs, args, pid):
                   f"average:{mean_dt:.1f}ms --> {1000. / mean_dt:.1f}FPS", end="      ")
 
             t0 = time()
-            cv2.imshow("EdgeYOLO result", img)
+            # cv2.imshow("EdgeYOLO result", img)
+            cv2.imshow(name_win, img)
             key = cv2.waitKey(delay)
             if key in [ord("q"), 27]:
                 msg["end"] = True
@@ -279,8 +308,6 @@ def show(msg, all_imgs, args, pid):
                 cv2.imwrite(os.path.join(args.save_dir, file_name), img)
                 logger.info(f"image saved to {file_name}.")
 
-    print()
-    print()
     torch.cuda.empty_cache()
     msg["end_count"] += 1
 
@@ -294,7 +321,7 @@ def show(msg, all_imgs, args, pid):
 
 
 def detect_multi(args):
-
+    logger.info(f'detect_multi({args})')
     freeze_support()
 
     shared_data = Manager().dict()
@@ -318,7 +345,8 @@ if __name__ == '__main__':
     time_beg_detect = time.time()
 
     opt = get_args()
-    setup_log(__file__)
+    setup_log('detect')
+    print_args(opt)
     (detect_multi if opt.mp else detect_single)(opt)
 
     time_end_detect = time.time()

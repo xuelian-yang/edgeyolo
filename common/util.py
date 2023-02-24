@@ -2,18 +2,28 @@
 
 import datetime
 import logging
+import os
 import os.path as osp
 from termcolor import colored
 
-def setup_log(call_file):
+
+def d_print(text):
+    print(colored(text, 'cyan'))
+
+
+def setup_log(filename):
     medium_format = (
         '[%(asctime)s] %(levelname)s : %(filename)s[%(lineno)d] %(funcName)s'
         ' >>> %(message)s'
     )
+    if not filename.lower().endswith('.log'):
+        filename = filename + '.log'
+    log_dir = osp.abspath(osp.join(osp.dirname(__file__), '../logs'))
+    if not osp.exists(log_dir):
+        os.makedirs(log_dir)
 
     dt_now = datetime.datetime.now()
-    log_name = osp.basename(call_file).replace('.py', '.log')
-    get_log_file = osp.abspath(osp.join(osp.dirname(call_file), log_name))
+    get_log_file = osp.join(log_dir, filename)
     logging.basicConfig(
         filename=get_log_file,
         filemode='w',
