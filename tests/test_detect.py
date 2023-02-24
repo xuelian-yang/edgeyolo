@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import copy
 from datetime import datetime
 import logging
 import os
@@ -17,19 +18,12 @@ from loguru import logger
 
 from glob import glob
 
-import logging
 import torch.cuda
-import argparse
 import cv2
-import os
-import os.path as osp
-import sys
-from termcolor import colored
-import time
 
 sys.path.append(osp.abspath(osp.join(osp.dirname(__file__), '..')))
 from edgeyolo.detect import Detector, TRTDetector, draw
-from common.util import setup_log, d_print
+from common.util import setup_log, d_print, create_gif
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +44,9 @@ def parse_args():
     parser.add_argument("--batch", type=int, default=1, help="batch size")
     parser.add_argument("--no-label", action="store_true", help="do not draw label")
     parser.add_argument("--save-dir", type=str, default="./output/detect/imgs/", help="image result save dir")
+    parser.add_argument("--source-dir", type=str, default="./output/detect/src", help="source image save dir")
     parser.add_argument("--save-all", action="store_true", help="save all images")
+    parser.add_argument("--gif", type=str, default="./output/detect/od-demo.gif", help="gif path")
     parser.add_argument("--fps", type=int, default=99999, help="max fps")
     args = parser.parse_args()
     for arg in vars(args):
@@ -60,7 +56,11 @@ def parse_args():
 
 def detect(args):
     logger.info(f'detect( {args} )')
-    exist_save_dir = os.path.isdir(args.save_dir)
+    exist_save_dir = osp.isdir(args.save_dir)
+    if not osp.exists(args.source_dir):
+        os.makedirs(args.source_dir)
+
+    image_names = []
 
     # detector setup
     detector = TRTDetector if args.trt else Detector
@@ -77,12 +77,12 @@ def detect(args):
         args.batch = detect.batch_size
 
     # source loader setup
-    if os.path.isdir(args.source):
+    if osp.isdir(args.source):
         class DirCapture:
             def __init__(self, dir_name):
                 self.imgs = []
                 for img_type in ["jpg", "png", "jpeg", "bmp", "webp"]:
-                    self.imgs += sorted(glob(os.path.join(dir_name, f"*.{img_type}")))
+                    self.imgs += sorted(glob(osp.join(dir_name, f"*.{img_type}")))
             def isOpened(self):
                 return bool(len(self.imgs))
             def read(self):
@@ -137,14 +137,17 @@ def detect(args):
               f"average:{sum(all_dt) / len(all_dt) / args.batch * 1000:.1f}ms", end="      ")
 
         key = -1
+        src_frames = copy.deepcopy(frames)
         imgs = draw(frames, results, detect.class_names, 2, draw_label=not args.no_label)
 
-        for img in imgs:
+        for idx, img in enumerate(imgs):
             cv2.imshow(name_win, img)
             count += 1
 
             key = cv2.waitKey(delay)
             if key in [ord("q"), 27]:
+                if args.save_all:
+                    create_gif(image_names, args.gif)
                 break
             elif key == ord(" "):
                 delay = 1 - delay
@@ -152,8 +155,11 @@ def detect(args):
                 if not exist_save_dir:
                     os.makedirs(args.save_dir, exist_ok=True)
                     exist_save_dir = True
-                file_name = f"{str(date.now()).split('.')[0].replace(':', '').replace('-', '').replace(' ', '')}.jpg"
-                cv2.imwrite(os.path.join(args.save_dir, file_name), img)
+                # file_name = f"{str(date.now()).split('.')[0].replace(':', '').replace('-', '').replace(' ', '')}.jpg"
+                file_name = f'{count:06d}.jpg'
+                cv2.imwrite(osp.join(args.save_dir, file_name), img)
+                cv2.imwrite(osp.join(args.source_dir, file_name), src_frames[idx])
+                image_names.append(osp.join(args.save_dir, file_name))
                 logger.info(f"image saved to {file_name}.")
         if key in [ord("q"), 27]:
             cv2.destroyAllWindows()

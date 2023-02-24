@@ -4,6 +4,7 @@ import datetime
 import logging
 import os
 import os.path as osp
+import PIL
 from termcolor import colored
 
 
@@ -32,3 +33,11 @@ def setup_log(filename):
     )
     logging.info('@{} created at {}'.format(get_log_file, dt_now))
     print(colored('@{} created at {}'.format(get_log_file, dt_now), 'magenta'))
+
+
+def create_gif(images, gif):
+    frames = []
+    for item in images:
+        new_frame = PIL.Image.open(item)
+        frames.append(new_frame)
+    frames[0].save(gif, format='GIF', append_images=frames[1:], save_all=True, duration=100, loop=0, comment=b'DAIR V2X Visualization')
